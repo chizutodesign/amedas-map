@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>アメダスマップ（気温・風速・気圧 切り替え付き）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    body { margin: 0; padding: 0; font-family: sans-serif; }
+    #map {
+      width: 100%;
+      height: calc(100vh - 60px);
+      background-color: #C2D1FA;
+    }
+    #controls {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      padding: 0 1em;
+      background: #ffffffcc;
+      border-bottom: 1px solid #ccc;
+    }
+    #time-label { margin-right: 1em; font-weight: bold; }
+    #slider { flex: 1; }
+    #buttons button { margin-right: 0.5em; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <div id="time-label">読み込み中…</div>
+    <div id="buttons">
+      <button onclick="setMode('temp')">気温</button>
+      <button onclick="setMode('wind')">風速</button>
+      <button onclick="setMode('pressure')">気圧</button>
+      <button id="play-button" onclick="togglePlay()">再生</button>
+    </div>
+    <input id="slider" type="range" min="0" max="11" step="1" value="11" />
+  </div>
+  <div id="map"></div>
+  <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+  <script>
+    let map;
+    let timeList = [];
+    let currentMode = 'temp';
+    let playInterval; // 再生タイマー用の変数
+
+    function setMode(mode) {
+      currentMode = mode;
+      updateMapForIndex(slider.value);
+    }
+
+    // 再生/一時停止ボタンのトグル機能
+    function togglePlay() {
+      const playButton = document.getElementById('play-button');
+      if (playInterval) {
+        clearInterval(playInterval);
+        playInterval = null;
+        playButton.textContent = '再生';
+      } else {
+        playButton.textContent = '一時停止';
+        // スライダーの現在の値から再生を開始
+        let currentIndex = parseInt(document.getElementById('slider').value);
+        playInterval = setInterval(() => {
+          currentIndex = (currentIndex + 1) % timeList.length; // 最後に達したら最初に戻る
+          document.getElementById('slider').value = currentIndex;
+          updateMapForIndex(currentIndex);
+        }, 1000); // 1秒ごとに更新
+      }
+    }
+
+    function generateTimeList() {
+      const list = [];
+      const now = new Date();
+      
+      const latestDataHour = new Date(now);
+      latestDataHour.setMinutes(0, 0, 0);
+
+      if (now.getMinutes() < 5) {
+        latestDataHour.setHours(latestDataHour.getHours() - 1);
+      }
+
+      for (let i = 11; i >= 0; i--) {
+        const t = new Date(latestDataHour.getTime() - i * 60 * 60 * 1000);
+        list.push(t);
+      }
+      return list;
+    }
+
+    function toTimestamp(dt) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}${pad(dt.getHours())}0000`;
+    }
+
+    function toJapaneseTimeString(dt) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${dt.getFullYear()}年${pad(dt.getMonth() + 1)}月${pad(dt.getDate())}日${pad(dt.getHours())}時00分`;
+    }
+
+    function getColorPaint(mode) {
+      if (mode === 'wind') {
+        return ['step', ['get', 'wind'], '#F2F2FF', 2, '#A0D2FF', 5, '#0040FF', 10, '#FAF500', 15, '#FF9900', 20, '#FF2800', 25, '#B40068'];
+      } else if (mode === 'pressure') {
+        return ['step', ['get', 'pressure'], '#B40068', 960, '#FF2800', 970, '#FF9900', 980, '#FFF500', 990, '#FFFF96', 1000, '#FFFFF0', 1010, '#B9EBFF', 1020, '#0096FF', 1030, '#002080'];
+      } else {
+        return ['step', ['get', 'temp'], '#002080', 0, '#0096FF', 5, '#B9EBFF', 10, '#FFFFF0', 15, '#FFFF96', 20, '#FFF500', 25, '#FF9900', 30, '#FF2800', 35, '#B40068'];
+      }
+    }
+
+    // 風向を示す線の終点座標を計算するヘルパー関数
+    function calculateWindLineEndPoint(lon, lat, windDirection16Points, windSpeed) {
+      if (windDirection16Points == null || windSpeed == null) return null;
+
+      let directionDegrees = windDirection16Points * 22.5;
+      directionDegrees = (directionDegrees + 180) % 360; // 「吹いていく方向」に調整
+
+      const lineLength = 0.03 * windSpeed; 
+      
+      const angleRad = (directionDegrees) * Math.PI / 180;
+
+      const endLon = lon + lineLength * Math.sin(angleRad);
+      const endLat = lat + lineLength * Math.cos(angleRad);
+
+      return [lon, lat, endLon, endLat];
+    }
+
+    async function fetchAmedasData(dt) {
+      const timestamp = toTimestamp(dt);
+      const [amedasData, stationData] = await Promise.all([
+        fetch(`https://www.jma.go.jp/bosai/amedas/data/map/${timestamp}.json`).then(r => r.json()),
+        fetch('https://www.jma.go.jp/bosai/amedas/const/amedastable.json').then(r => r.json())
+      ]);
+
+      const pointFeatures = [];
+      const lineFeatures = [];
+
+      Object.entries(amedasData).forEach(([code, data]) => {
+        const station = stationData[code];
+        if (!station || (data.temp == null && data.wind == null && data.normalPressure == null && data.pressure == null)) return [];
+        
+        const lat = station.lat[0] + station.lat[1] / 60;
+        const lon = station.lon[0] + station.lon[1] / 60;
+        
+        pointFeatures.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [lon, lat] },
+          properties: {
+            name: station.kjName,
+            temp: data.temp ? data.temp[0] : null,
+            wind: data.wind ? data.wind[0] : null,
+            pressure: data.normalPressure ? data.normalPressure[0] : (data.pressure ? data.pressure[0] : null),
+            windDirection: data.windDirection ? data.windDirection[0] : null
+          }
+        });
+
+        const lineCoords = calculateWindLineEndPoint(lon, lat, data.windDirection ? data.windDirection[0] : null, data.wind ? data.wind[0] : null);
+        if (lineCoords) {
+          lineFeatures.push({
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: [[lineCoords[0], lineCoords[1]], [lineCoords[2], lineCoords[3]]] },
+            properties: {
+              wind: data.wind ? data.wind[0] : null 
+            }
+          });
+        }
+      });
+
+      return {
+        points: { type: "FeatureCollection", features: pointFeatures },
+        lines: { type: "FeatureCollection", features: lineFeatures }
+      };
+    }
+
+    async function updateMapForIndex(index) {
+      const dt = timeList[index];
+      document.getElementById('time-label').textContent = toJapaneseTimeString(dt);
+      const geojson = await fetchAmedasData(dt);
+
+      const excludeStations = ['軽井沢', '奥日光', '河口湖', '富士山'];
+      const pressureFilter = ['all', ['has', 'pressure'], ['!=', ['get', 'pressure'], null], ['!', ['in', ['get', 'name'], ['literal', excludeStations]]]];
+      const windFilter = ['all', ['has', 'wind'], ['!=', ['get', 'wind'], null]];
+      const tempFilter = ['all', ['has', 'temp'], ['!=', ['get', 'temp'], null]];
+      
+      let circlesActiveFilter;
+      let labelsActiveFilter;
+      let namesActiveFilter;
+      let linesActiveFilter;
+
+      if (currentMode === 'wind') {
+        circlesActiveFilter = windFilter; 
+        labelsActiveFilter = windFilter;
+        namesActiveFilter = windFilter;
+        linesActiveFilter = windFilter;
+      } else if (currentMode === 'pressure') {
+        circlesActiveFilter = pressureFilter;
+        labelsActiveFilter = pressureFilter;
+        namesActiveFilter = pressureFilter;
+        linesActiveFilter = ['==', 'mode', 'never_match'];
+      } else { // tempモード
+        circlesActiveFilter = tempFilter;
+        labelsActiveFilter = tempFilter;
+        namesActiveFilter = tempFilter;
+        linesActiveFilter = ['==', 'mode', 'never_match'];
+      }
+
+
+      if (!map.getSource('amedas-points')) {
+        map.addSource('amedas-points', { type: 'geojson', data: geojson.points });
+        map.addSource('amedas-lines', { type: 'geojson', data: geojson.lines });
+
+        map.addLayer({
+          id: 'wind-lines',
+          type: 'line',
+          source: 'amedas-lines',
+          layout: {
+            'line-cap': 'square',
+            'line-join': 'round'
+          },
+          paint: {
+            'line-color': getColorPaint('wind'),
+            'line-width': ['interpolate', ['linear'], ['zoom'], 4, 2, 10, 6] 
+          },
+          filter: linesActiveFilter
+        });
+
+        map.addLayer({
+          id: 'amedas-circles',
+          type: 'circle',
+          source: 'amedas-points',
+          paint: {
+            // currentModeに応じて半径を動的に調整
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 4, 10, 14], // まずは通常のサイズに設定
+            'circle-color': getColorPaint(currentMode)
+          },
+          filter: circlesActiveFilter
+        });
+
+        map.addLayer({
+          id: 'amedas-labels',
+          type: 'symbol',
+          source: 'amedas-points',
+          layout: {
+            'text-field': [
+              'case',
+              ['!=', ['get', currentMode], null],
+              ['to-string', ['get', currentMode]], 
+              ''
+            ],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 7.9, 0, 8, 12, 12, 16],
+            'text-offset': [0, 0],
+            'text-anchor': 'center',
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'] 
+          },
+          paint: {
+            'text-color': '#000000',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 2
+          },
+          filter: labelsActiveFilter
+        });
+
+        map.addLayer({
+          id: 'amedas-names',
+          type: 'symbol',
+          source: 'amedas-points',
+          layout: {
+            'text-field': [
+              'case',
+              ['!=', ['get', 'name'], null],
+              ['get', 'name'],
+              ''
+            ],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 7.9, 0, 8, 10],
+            'text-offset': [0, 2.5],
+            'text-anchor': 'bottom',
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular']
+          },
+          paint: {
+            'text-color': '#333333',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 1.5
+          },
+          filter: namesActiveFilter
+        });
+
+        map.on('click', 'amedas-circles', e => {
+          const props = e.features[0].properties;
+          new maplibregl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(`<strong>${props.name}</strong><br>
+                      気温：${props.temp ?? '–'}℃<br>
+                      風速：${props.wind ?? '–'}m/s<br>
+                      気圧：${props.pressure ?? '–'}hPa`)
+            .addTo(map);
+        });
+      } else {
+        map.getSource('amedas-points').setData(geojson.points);
+        map.getSource('amedas-lines').setData(geojson.lines);
+        
+        map.setPaintProperty('amedas-circles', 'circle-color', getColorPaint(currentMode));
+        // ここで風速モードの場合のみ半径を半分に調整
+        if (currentMode === 'wind') {
+            map.setPaintProperty('amedas-circles', 'circle-radius', ['interpolate', ['linear'], ['zoom'], 4, 0, 7, 5, 10, 10]);
+        } else {
+            map.setPaintProperty('amedas-circles', 'circle-radius', ['interpolate', ['linear'], ['zoom'], 4, 4, 10, 14]);
+        }
+        
+        map.setLayoutProperty('amedas-labels', 'text-field', [
+          'case',
+          ['!=', ['get', currentMode], null],
+          ['to-string', ['get', currentMode]],
+          ''
+        ]);
+        map.setLayoutProperty('amedas-labels', 'text-font', ['Open Sans Regular', 'Arial Unicode MS Regular']);
+        map.setPaintProperty('amedas-labels', 'text-halo-width', 2);
+
+        map.setLayoutProperty('amedas-names', 'text-field', [
+          'case',
+          ['!=', ['get', 'name'], null],
+          ['get', 'name'],
+          ''
+        ]);
+        map.setLayoutProperty('amedas-names', 'text-font', ['Open Sans Regular', 'Arial Unicode MS Regular']);
+        map.setPaintProperty('amedas-names', 'text-halo-width', 1.5);
+        
+        map.setFilter('amedas-circles', circlesActiveFilter);
+        map.setFilter('amedas-labels', labelsActiveFilter);
+        map.setFilter('amedas-names', namesActiveFilter);
+        map.setFilter('wind-lines', linesActiveFilter);
+        map.setPaintProperty('wind-lines', 'line-color', getColorPaint('wind'));
+        map.setPaintProperty('wind-lines', 'line-width', ['interpolate', ['linear'], ['zoom'], 4, 2, 10, 6]); 
+        map.setLayoutProperty('wind-lines', 'line-cap', 'square');
+        map.setLayoutProperty('wind-lines', 'line-join', 'round');
+      }
+    }
+
+    async function init() {
+      timeList = generateTimeList();
+
+      map = new maplibregl.Map({
+        container: 'map',
+        style: {
+          version: 8,
+          glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+          sprite: 'https://demotiles.maplibre.org/sprite',
+          sources: {
+            'jma-green': {
+              type: 'raster',
+              tiles: ['https://www.jma.go.jp/tile/jma/green-cities/{z}/{x}/{y}.png'],
+              tileSize: 256,
+              attribution: '気象庁'
+            }
+          },
+          layers: [{
+            id: 'jma-green-layer',
+            type: 'raster',
+            source: 'jma-green',
+            minzoom: 1,
+            maxzoom: 20
+          }]
+        },
+        center: [136, 36],
+        zoom: 4
+      });
+
+      map.addControl(new maplibregl.NavigationControl());
+
+      map.on('load', async () => {
+        await updateMapForIndex(document.getElementById('slider').value);
+      });
+
+      document.getElementById('slider').addEventListener('input', async () => {
+        await updateMapForIndex(document.getElementById('slider').value);
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

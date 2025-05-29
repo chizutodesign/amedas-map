@@ -8,14 +8,13 @@
       "maxzoom": 14
     },
   },
-  "sprite": "https://mierune.github.io/rekichizu-data/sprite",
   "glyphs": "https://mierune.github.io/fonts/{fontstack}/{range}.pbf",
   "layers": [
     {
       "id": "background",
       "type": "background",
       "layout": {"visibility": "visible"},
-      "paint": {"background-color": "rgba(201, 207, 207, 1)"}
+      "paint": {"background-color": "rgba(162, 169, 170, 1)"}
     },
     {
       "id": "hillshade",
@@ -45,7 +44,7 @@
       "source-layer": "water",
       "filter": ["all", ["!=", "intermittent", 1]],
       "layout": {"visibility": "visible"},
-      "paint": {"fill-color": "rgba(149, 157, 157, 1)"}
+      "paint": {"fill-color": "rgba(120, 130, 135, 1)"}
     },
     {
       "id": "waterway-tunnel",
@@ -66,7 +65,7 @@
       "source-layer": "waterway",
       "filter": ["any", ["==", "class", "river"], ["!=", "brunnel", "tunnel"]],
       "paint": {
-        "line-color": "rgba(149, 157, 157, 1)",
+        "line-color": "rgba(123, 132, 132, 1)",
         "line-width": {"stops": [[11, 0.5], [20, 6]]}
       }
     },
@@ -290,39 +289,12 @@
       "layout": {
         "line-join": "round",
         "line-cap": "butt",
-        "visibility": "visible"
+        "visibility": "none"
       },
       "paint": {
         "line-color": "rgba(221, 123, 123, 1)",
         "line-width": {"stops": [[11, 1], [13, 2], [16, 4]]},
         "line-opacity": {"stops": [[11, 0.7], [16, 0.3]]},
-        "line-dasharray": [2, 1]
-      }
-    },
-    {
-      "id": "border-city1",
-      "type": "line",
-      "source": "rekichizu",
-      "source-layer": "boundary",
-      "minzoom": 11,
-      "filter": [
-        "all",
-        ["==", ["geometry-type"], "LineString"],
-        [
-          "all",
-          ["==", ["get", "admin_level"], 6],
-          ["==", ["get", "maritime"], 0]
-        ]
-      ],
-      "layout": {
-        "line-join": "round",
-        "line-cap": "butt",
-        "visibility": "visible"
-      },
-      "paint": {
-        "line-color": "rgba(221, 123, 123, 1)",
-        "line-width": {"stops": [[11, 1], [13, 2], [16, 3]]},
-        "line-opacity": 0.7,
         "line-dasharray": [2, 1]
       }
     },

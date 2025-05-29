@@ -1,0 +1,413 @@
+{
+  "version": 8,
+  "metadata": {"maputnik:renderer": "mlgljs"},
+  "sources": {
+    "rekichizu": {
+      "type": "vector",
+      "tiles": ["https://tile.openstreetmap.jp/data/planet/{z}/{x}/{y}.pbf"],
+      "maxzoom": 14
+    },
+    "terrain": {
+      "type": "raster-dem",
+      "tiles": [
+        "https://gbank.gsj.jp/seamless/elev/terrainRGB/land/{z}/{y}/{x}.png"
+      ],
+      "minzoom": 0,
+      "maxzoom": 14,
+      "tileSize": 256,
+      "encoding": "mapbox",
+      "attribution": "<a href=\"https://maps.gsi.go.jp/development/ichiran.html\">地理院タイル</a> | <a href=\"https://gbank.gsj.jp/seamless/elev/\">産総研シームレス標高タイル</a>"
+    }
+  },
+  "sprite": "https://mierune.github.io/rekichizu-data/sprite",
+  "glyphs": "https://mierune.github.io/fonts/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "layout": {"visibility": "visible"},
+      "paint": {"background-color": "rgba(201, 207, 207, 1)"}
+    },
+    {
+      "id": "hillshade",
+      "type": "hillshade",
+      "source": "terrain",
+      "layout": {"visibility": "visible"},
+      "paint": {
+        "hillshade-shadow-color": "rgba(200, 200, 200, 1)",
+        "hillshade-exaggeration": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          6,
+          0.1,
+          14,
+          0.3,
+          16,
+          0.2
+        ],
+        "hillshade-highlight-color": "rgba(255, 255, 255, 1)"
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "rekichizu",
+      "source-layer": "water",
+      "filter": ["all", ["!=", "intermittent", 1]],
+      "layout": {"visibility": "visible"},
+      "paint": {"fill-color": "rgba(149, 157, 157, 1)"}
+    },
+    {
+      "id": "waterway-tunnel",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "waterway",
+      "filter": ["any", ["==", "brunnel", "tunnel"]],
+      "paint": {
+        "line-color": "rgba(163, 206, 240, 1)",
+        "line-width": {"stops": [[11, 0.5], [20, 6]]},
+        "line-dasharray": [1, 1]
+      }
+    },
+    {
+      "id": "waterway-river",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "waterway",
+      "filter": ["any", ["==", "class", "river"], ["!=", "brunnel", "tunnel"]],
+      "paint": {
+        "line-color": "rgba(149, 157, 157, 1)",
+        "line-width": {"stops": [[11, 0.5], [20, 6]]}
+      }
+    },
+    {
+      "id": "bridge",
+      "type": "fill",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 14,
+      "filter": ["all", ["==", "class", "bridge"]],
+      "layout": {"visibility": "visible"},
+      "paint": {
+        "fill-color": {
+          "stops": [
+            [16, "rgba(199, 206, 209, 1)"],
+            [20, "rgba(157, 168, 174, 1)"]
+          ]
+        },
+        "fill-opacity": 0.5
+      }
+    },
+    {
+      "id": "platform",
+      "type": "fill",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 14,
+      "filter": [
+        "all",
+        ["==", "$type", "Polygon"],
+        ["!has", "brunnel"],
+        ["==", "class", "path"],
+        ["==", "subclass", "platform"]
+      ],
+      "layout": {"visibility": "visible"},
+      "paint": {"fill-color": "rgba(173, 202, 209, 1)", "fill-opacity": 1}
+    },
+    {
+      "id": "pedestrian",
+      "type": "fill",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 14,
+      "filter": [
+        "all",
+        ["==", "$type", "Polygon"],
+        ["!has", "brunnel"],
+        ["!in", "class", "bridge", "pier"]
+      ],
+      "layout": {"visibility": "visible"},
+      "paint": {
+        "fill-color": {
+          "stops": [
+            [16, "rgba(199, 206, 209, 1)"],
+            [20, "rgba(157, 168, 174, 1)"]
+          ]
+        },
+        "fill-opacity": 0.5
+      }
+    },
+    {
+      "id": "landuse-pier",
+      "type": "fill",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 7,
+      "filter": ["all", ["==", "$type", "Polygon"], ["==", "class", "pier"]],
+      "layout": {"visibility": "visible"},
+      "paint": {"fill-color": "#F3F3F0"}
+    },
+    {
+      "id": "road-path-pedst",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 13,
+      "filter": [
+        "all",
+        ["in", "class", "footway", "path", "pedestrian"],
+        ["==", "$type", "LineString"]
+      ],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "round",
+        "visibility": "none"
+      },
+      "paint": {
+        "line-color": "rgba(243, 243, 240, 1)",
+        "line-width": {"base": 2.2, "stops": [[13, 3], [16, 5], [25, 200]]}
+      }
+    },
+    {
+      "id": "road-service-track",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 14,
+      "filter": ["all", ["in", "class", "service", "track", "raceway"]],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "none"
+      },
+      "paint": {
+        "line-color": "rgba(157, 168, 174, 1)",
+        "line-width": {"base": 2.2, "stops": [[13, 1.5], [24, 1200]]}
+      }
+    },
+    {
+      "id": "road-minor",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 14,
+      "filter": ["all", ["==", "class", "minor"]],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "round",
+        "visibility": "none"
+      },
+      "paint": {
+        "line-color": "rgba(157, 168, 174, 1)",
+        "line-width": {"base": 2.2, "stops": [[11, 2], [24, 2000]]}
+      }
+    },
+    {
+      "id": "road-secotertiary",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 13,
+      "filter": ["all", ["in", "class", "secondary", "tertiary"]],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "none"
+      },
+      "paint": {
+        "line-color": "rgba(157, 168, 174, 1)",
+        "line-width": {"base": 2.2, "stops": [[11, 2], [13, 4], [24, 2500]]}
+      }
+    },
+    {
+      "id": "road-primary",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 10,
+      "filter": ["all", ["==", "class", "primary"]],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "none"
+      },
+      "paint": {
+        "line-color": "rgba(157, 168, 174, 1)",
+        "line-width": {"base": 2.2, "stops": [[8, 2.5], [12, 5], [24, 3000]]}
+      }
+    },
+    {
+      "id": "road-trunk",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 9,
+      "filter": ["all", ["==", "class", "trunk"]],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "none"
+      },
+      "paint": {
+        "line-color": "rgba(117, 163, 155, 1)",
+        "line-width": {"base": 2.2, "stops": [[8, 2.5], [12, 5], [24, 3000]]}
+      }
+    },
+    {
+      "id": "road-motorway",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "minzoom": 8,
+      "filter": ["all", ["==", "class", "motorway"]],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "none"
+      },
+      "paint": {
+        "line-color": "rgba(77, 153, 120, 1)",
+        "line-width": {"base": 2.2, "stops": [[6, 3], [12, 7], [24, 4000]]}
+      }
+    },
+    {
+      "id": "rail",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "transportation",
+      "filter": ["all", ["in", "class", "rail", "transit", "aerialway"]],
+      "layout": {"visibility": "none"},
+      "paint": {
+        "line-color": {"stops": [[14, "#555"], [18, "#888"]]},
+        "line-width": {"base": 1.4, "stops": [[14, 0.75], [15, 1], [20, 2]]}
+      }
+    },
+    {
+      "id": "border-city2",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "boundary",
+      "minzoom": 11,
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "LineString"],
+        [
+          "all",
+          ["==", ["get", "admin_level"], 7],
+          ["==", ["get", "maritime"], 0]
+        ]
+      ],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "visible"
+      },
+      "paint": {
+        "line-color": "rgba(221, 123, 123, 1)",
+        "line-width": {"stops": [[11, 1], [13, 2], [16, 4]]},
+        "line-opacity": {"stops": [[11, 0.7], [16, 0.3]]},
+        "line-dasharray": [2, 1]
+      }
+    },
+    {
+      "id": "border-city1",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "boundary",
+      "minzoom": 11,
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "LineString"],
+        [
+          "all",
+          ["==", ["get", "admin_level"], 6],
+          ["==", ["get", "maritime"], 0]
+        ]
+      ],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "visible"
+      },
+      "paint": {
+        "line-color": "rgba(221, 123, 123, 1)",
+        "line-width": {"stops": [[11, 1], [13, 2], [16, 3]]},
+        "line-opacity": 0.7,
+        "line-dasharray": [2, 1]
+      }
+    },
+    {
+      "id": "border-branch",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "boundary",
+      "minzoom": 9,
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "LineString"],
+        [
+          "all",
+          ["==", ["get", "admin_level"], 5],
+          ["==", ["get", "maritime"], 0]
+        ]
+      ],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "visible"
+      },
+      "paint": {
+        "line-color": "rgba(221, 123, 123, 1)",
+        "line-width": {"stops": [[10, 2], [12, 4], [16, 8]]},
+        "line-opacity": 0.3
+      }
+    },
+    {
+      "id": "border",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "boundary",
+      "minzoom": 3,
+      "filter": [
+        "all",
+        ["==", "$type", "LineString"],
+        ["all", ["==", "admin_level", 4], ["==", "maritime", 0]]
+      ],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "none"
+      },
+      "paint": {
+        "line-color": "rgba(153, 153, 153, 1)",
+        "line-width": {"stops": [[4, 1], [6, 1.5], [10, 3], [12, 5], [16, 10]]},
+        "line-opacity": 0.3
+      }
+    },
+    {
+      "id": "border-line",
+      "type": "line",
+      "source": "rekichizu",
+      "source-layer": "boundary",
+      "minzoom": 4,
+      "filter": [
+        "all",
+        ["==", "$type", "LineString"],
+        ["all", ["==", "admin_level", 4], ["==", "maritime", 0]]
+      ],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "butt",
+        "visibility": "visible"
+      },
+      "paint": {
+        "line-color": "rgba(102, 102, 102, 1)",
+        "line-width": {"stops": [[6, 1], [12, 2], [16, 3]]},
+        "line-dasharray": [3, 2],
+        "line-opacity": 0.8
+      }
+    }
+  ],
+  "id": "59c7ajp"
+}

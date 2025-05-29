@@ -9,9 +9,6 @@
     },
     "terrain": {
       "type": "raster-dem",
-      "tiles": [
-        "https://gbank.gsj.jp/seamless/elev/terrainRGB/land/{z}/{y}/{x}.png"
-      ],
       "minzoom": 0,
       "maxzoom": 14,
       "tileSize": 256,

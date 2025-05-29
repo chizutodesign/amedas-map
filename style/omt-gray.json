@@ -7,6 +7,14 @@
       "tiles": ["https://tile.openstreetmap.jp/data/planet/{z}/{x}/{y}.pbf"],
       "maxzoom": 14
     },
+    "terrain": {
+      "type": "raster-dem",
+      "minzoom": 0,
+      "maxzoom": 14,
+      "tileSize": 256,
+      "encoding": "mapbox",
+      "attribution": "<a href=\"https://maps.gsi.go.jp/development/ichiran.html\">地理院タイル</a> | <a href=\"https://gbank.gsj.jp/seamless/elev/\">産総研シームレス標高タイル</a>"
+    }
   },
   "glyphs": "https://mierune.github.io/fonts/{fontstack}/{range}.pbf",
   "layers": [

@@ -509,7 +509,26 @@
 
       map = new maplibregl.Map({
         container: 'map',
-        style: 'style/omt-gray.json', // ★変更点：ベクタータイルスタイルを指定
+        style: {
+          version: 8,
+          glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+          sprite: 'https://demotiles.maplibre.org/sprite',
+          sources: {
+            'jma-green': {
+              type: 'raster',
+              tiles: ['https://www.jma.go.jp/tile/jma/green-cities/{z}/{x}/{y}.png'],
+              tileSize: 256,
+              attribution: '気象庁'
+            }
+          },
+          layers: [{
+            id: 'jma-green-layer',
+            type: 'raster',
+            source: 'jma-green',
+            minzoom: 1,
+            maxzoom: 20
+          }]
+        },
         center: [136, 36],
         zoom: 4
       });
@@ -521,6 +540,7 @@
       });
 
       document.getElementById('slider').addEventListener('input', async () => {
+        // スライダーを手動で動かしたら自動再生を停止
         if (playInterval) clearInterval(playInterval); 
         document.getElementById('play-button').textContent = '▶︎';
         playInterval = null;

@@ -2,70 +2,242 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>アメダスマップ（気温・風速・気圧 切り替え付き）</title>
+  <title>アメダスマップ（気温・風・気圧）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
     body { margin: 0; padding: 0; font-family: sans-serif; }
     #map {
       width: 100%;
-      height: calc(100vh - 60px);
+      height: calc(100vh - 120px);
+      margin-top: 60px;
       background-color: #C2D1FA;
     }
-    #controls {
+
+    /* --- デスクトップ & 基本スタイル --- */
+    #top-controls {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 60px; /* PC表示時の高さ */
+      padding: 0 1em; /* 左右のパディング */
+      background: #ffffffcc;
+      z-index: 1000;
+      white-space: nowrap; /* inline-block要素の折り返しを防ぐ */
+      font-size: 0; /* inline-block間の空白を削除 */
+      text-align: center; /* inline-block要素の左揃え */
+      box-sizing: border-box;
+    }
+
+    #top-controls .left-group {
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 1em; /* スライダーとの間隔 */
+      font-size: initial; /* 親で0にしたフォントサイズを戻す */
+      line-height: normal; /* 通常の行間に戻す */
+      white-space: normal; /* 必要に応じてコンテンツの折り返しを許可 */
+    }
+
+    #top-controls .left-group > * { /* .left-group内の要素を横並びにする */
+      display: inline-block;
+      vertical-align: middle;
+    }
+    
+    #time-label {
+      font-weight: bold;
+      padding: 1em 0;
+    }
+
+    #slider-wrapper {
+      display: inline-block;
+      vertical-align: middle;
+      width: 300px; /* PC表示時のスライダーラッパー幅 (調整可能) */
+      box-sizing: border-box;
+      font-size: initial; /* 親で0にしたフォントサイズを戻す */
+      line-height: normal; /* 通常の行間に戻す */
+      padding: 0; /* ラッパー自身のパディングはなし */
+      background-color: transparent; /* デスクトップでは赤背景不要なら */
+    }
+
+    input#slider { /* スライダー本体の共通スタイル */
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 0;
+    }
+
+    #top-controls button {
+      width: 36px;
+      height: 36px;
+      font-size: 1.2em;
+      margin: 0 0.2em;
+      cursor: pointer;
+      border: solid 2px;
+      border-radius: 18px;
+      padding: 0;
+      line-height: 34px;
+      text-align: center;
+      background-color: #fff;
+    }
+    /* 下部コントロールパネルのスタイル (Flexboxは維持) */
+    #bottom-controls {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
       height: 60px;
       display: flex;
       align-items: center;
-      padding: 0 1em;
+      padding: 0;
       background: #ffffffcc;
-      border-bottom: 1px solid #ccc;
+      z-index: 1000;
     }
-    #time-label { margin-right: 1em; font-weight: bold; }
-    #slider { flex: 1; }
-    #buttons button { margin-right: 0.5em; }
+    #buttons {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      justify-content: space-around;
+      height: 100%;
+    }
+    #buttons .app-button {
+      background-color: transparent;
+      color: #000000;
+      border: none;
+      border-radius: 0;
+      padding: 12px 0;
+      margin: 0;
+      font-size: 1em;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: none;
+      transition: background-color 0.3s ease, transform 0.1s ease;
+      flex: 1;
+      text-align: center;
+      position: relative;
+    }
+    #buttons .app-button:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: 25%;
+      height: 50%;
+      width: 1px;
+      background-color: #ccc;
+    }
+    #buttons .app-button:hover { background-color: #e0e0e0; }
+    #buttons .app-button:active { background-color: #d0d0d0; }
+
+    /* --- スマホビューでのレイアウト調整 (Media Query) --- */
+    @media (max-width: 768px) {
+      #top-controls {
+        display: block; /* Flexbox解除 */
+        height: auto;   /* 内容に応じて高さを自動調整 */
+        padding: 0 1em; /* 左右パディングは維持 */
+        white-space: normal; /* 通常の折り返しに戻す */
+        font-size: initial;  /* font-size:0をリセット */
+        line-height: normal; /* 通常の行間に戻す */
+      }
+
+      #top-controls .left-group {
+        display: block; /* モバイルではブロック要素として全幅取る */
+        width: auto;    /* または width: 100%; */
+        margin-right: 0; /* 右マージン不要 */
+        margin-bottom: 0.5em; /* 下のマージン */
+        text-align: left; /* 内容を左揃え */
+      }
+      /* .left-group内の要素のスタイルはデスクトップと共通でOK */
+      
+      #slider-wrapper {
+        display: block; /* モバイルではブロック要素として全幅取る */
+        width: 100%;    /* 親のコンテンツ幅いっぱいに */
+        box-sizing: border-box;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+        margin-left: 0; /* 不要、ブロック要素なので */
+        margin-right: 0;/* 不要、ブロック要素なので */
+        padding: 0; /* ラッパー自体のパディングは0に */
+      }
+      /* input#slider は上記の共通スタイルが適用される */
+
+      #map {
+        height: calc(100vh - 160px); /* #top-controlsの高さがautoになるため調整が必要な場合あり */
+        margin-top: 100px; /* #top-controlsの実際の高さに基づいて調整 */
+      }
+    }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <div id="time-label">読み込み中…</div>
-    <div id="buttons">
-      <button onclick="setMode('temp')">気温</button>
-      <button onclick="setMode('wind')">風速</button>
-      <button onclick="setMode('pressure')">気圧</button>
-      <button id="play-button" onclick="togglePlay()">再生</button>
+  <div id="top-controls">
+    <div class="left-group">
+      <div id="time-label">読み込み中…</div>
+      <button onclick="prevTime()">&lt;</button>
+      <button id="play-button" onclick="togglePlay()">▶︎</button>
+      <button onclick="nextTime()">&gt;</button>
     </div>
-    <input id="slider" type="range" min="0" max="11" step="1" value="11" />
+    <div id="slider-wrapper">
+      <input id="slider" type="range" min="0" max="11" step="1" value="11" />
+    </div>
+  </div>
+  <div id="bottom-controls">
+    <div id="buttons">
+      <button class="app-button temp" onclick="setMode('temp')">気温</button>
+      <button class="app-button wind" onclick="setMode('wind')">風向風速</button>
+      <button class="app-button pressure" onclick="setMode('pressure')">気圧</button>
+    </div>
   </div>
   <div id="map"></div>
   <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
   <script>
+    // JavaScript部分は変更なし
     let map;
     let timeList = [];
     let currentMode = 'temp';
-    let playInterval; // 再生タイマー用の変数
+    let playInterval; 
 
     function setMode(mode) {
       currentMode = mode;
-      updateMapForIndex(slider.value);
+      updateMapForIndex(document.getElementById('slider').value);
     }
 
-    // 再生/一時停止ボタンのトグル機能
     function togglePlay() {
       const playButton = document.getElementById('play-button');
+      const slider = document.getElementById('slider');
       if (playInterval) {
         clearInterval(playInterval);
         playInterval = null;
-        playButton.textContent = '再生';
+        playButton.textContent = '▶︎'; 
       } else {
-        playButton.textContent = '一時停止';
-        // スライダーの現在の値から再生を開始
-        let currentIndex = parseInt(document.getElementById('slider').value);
+        playButton.textContent = '‖'; 
+        let currentIndex = parseInt(slider.value);
         playInterval = setInterval(() => {
-          currentIndex = (currentIndex + 1) % timeList.length; // 最後に達したら最初に戻る
-          document.getElementById('slider').value = currentIndex;
+          currentIndex = (currentIndex + 1) % timeList.length;
+          slider.value = currentIndex;
           updateMapForIndex(currentIndex);
-        }, 1000); // 1秒ごとに更新
+        }, 1000); 
       }
+    }
+
+    function prevTime() {
+      const slider = document.getElementById('slider');
+      let currentIndex = parseInt(slider.value);
+      currentIndex = (currentIndex - 1 + timeList.length) % timeList.length;
+      slider.value = currentIndex;
+      updateMapForIndex(currentIndex);
+      if (playInterval) clearInterval(playInterval); 
+      document.getElementById('play-button').textContent = '▶︎';
+      playInterval = null;
+    }
+
+    function nextTime() {
+      const slider = document.getElementById('slider');
+      let currentIndex = parseInt(slider.value);
+      currentIndex = (currentIndex + 1) % timeList.length;
+      slider.value = currentIndex;
+      updateMapForIndex(currentIndex);
+      if (playInterval) clearInterval(playInterval); 
+      document.getElementById('play-button').textContent = '▶︎';
+      playInterval = null;
     }
 
     function generateTimeList() {
@@ -106,12 +278,11 @@
       }
     }
 
-    // 風向を示す線の終点座標を計算するヘルパー関数
     function calculateWindLineEndPoint(lon, lat, windDirection16Points, windSpeed) {
       if (windDirection16Points == null || windSpeed == null) return null;
 
       let directionDegrees = windDirection16Points * 22.5;
-      directionDegrees = (directionDegrees + 180) % 360; // 「吹いていく方向」に調整
+      directionDegrees = (directionDegrees) % 360; 
 
       const lineLength = 0.03 * windSpeed; 
       
@@ -125,7 +296,7 @@
 
     async function fetchAmedasData(dt) {
       const timestamp = toTimestamp(dt);
-      const [amedasData, stationData] = await Promise.all([
+      const [amedasData, stationData] = await Promise.all([ 
         fetch(`https://www.jma.go.jp/bosai/amedas/data/map/${timestamp}.json`).then(r => r.json()),
         fetch('https://www.jma.go.jp/bosai/amedas/const/amedastable.json').then(r => r.json())
       ]);
@@ -140,6 +311,8 @@
         const lat = station.lat[0] + station.lat[1] / 60;
         const lon = station.lon[0] + station.lon[1] / 60;
         
+        let stationPressure = data.normalPressure ? data.normalPressure[0] : (data.pressure ? data.pressure[0] : null);
+
         pointFeatures.push({
           type: "Feature",
           geometry: { type: "Point", coordinates: [lon, lat] },
@@ -147,7 +320,7 @@
             name: station.kjName,
             temp: data.temp ? data.temp[0] : null,
             wind: data.wind ? data.wind[0] : null,
-            pressure: data.normalPressure ? data.normalPressure[0] : (data.pressure ? data.pressure[0] : null),
+            pressure: stationPressure, 
             windDirection: data.windDirection ? data.windDirection[0] : null
           }
         });
@@ -175,7 +348,7 @@
       document.getElementById('time-label').textContent = toJapaneseTimeString(dt);
       const geojson = await fetchAmedasData(dt);
 
-      const excludeStations = ['軽井沢', '奥日光', '河口湖', '富士山'];
+      const excludeStations = ['軽井沢', '奥日光', '河口湖', '富士山']; //現地気圧のみの観測点はトル
       const pressureFilter = ['all', ['has', 'pressure'], ['!=', ['get', 'pressure'], null], ['!', ['in', ['get', 'name'], ['literal', excludeStations]]]];
       const windFilter = ['all', ['has', 'wind'], ['!=', ['get', 'wind'], null]];
       const tempFilter = ['all', ['has', 'temp'], ['!=', ['get', 'temp'], null]];
@@ -227,8 +400,7 @@
           type: 'circle',
           source: 'amedas-points',
           paint: {
-            // currentModeに応じて半径を動的に調整
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 4, 10, 14], // まずは通常のサイズに設定
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 4, 10, 14], 
             'circle-color': getColorPaint(currentMode)
           },
           filter: circlesActiveFilter
@@ -297,9 +469,8 @@
         map.getSource('amedas-lines').setData(geojson.lines);
         
         map.setPaintProperty('amedas-circles', 'circle-color', getColorPaint(currentMode));
-        // ここで風速モードの場合のみ半径を半分に調整
         if (currentMode === 'wind') {
-            map.setPaintProperty('amedas-circles', 'circle-radius', ['interpolate', ['linear'], ['zoom'], 4, 0, 7, 5, 10, 10]);
+            map.setPaintProperty('amedas-circles', 'circle-radius', ['interpolate', ['linear'], ['zoom'], 4, 2, 10, 7]);
         } else {
             map.setPaintProperty('amedas-circles', 'circle-radius', ['interpolate', ['linear'], ['zoom'], 4, 4, 10, 14]);
         }
@@ -369,6 +540,10 @@
       });
 
       document.getElementById('slider').addEventListener('input', async () => {
+        // スライダーを手動で動かしたら自動再生を停止
+        if (playInterval) clearInterval(playInterval); 
+        document.getElementById('play-button').textContent = '▶︎';
+        playInterval = null;
         await updateMapForIndex(document.getElementById('slider').value);
       });
     }
